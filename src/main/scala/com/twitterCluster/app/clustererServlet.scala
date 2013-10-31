@@ -5,6 +5,10 @@ import scalate.ScalateSupport
 import com.mongodb._
 import com.mongodb.casbah.Imports._
 import scala.xml._
+import org.joda.convert.ToString
+import org.joda.convert.ToString
+import org.joda.convert.ToString
+import org.joda.convert.ToString
 
 class clustererServlet extends TwitterclustererwebappStack with ScalateSupport {
 
@@ -32,10 +36,83 @@ class clustererServlet extends TwitterclustererwebappStack with ScalateSupport {
         <script src="/assets/map.js"></script>
       </head>
       <body>
-        <div id="map-canvas"></div>
-        <div id="coord-info"></div>
+        <form method="POST" action="/maps">
+          <div id="map-canvas"></div>
+          <div id="coord-info"></div>
+          <input type="text" id="northeast" name="northeast"/>
+          <input type="text" id="southwest" name="southwest"/>
+          <input type="submit" method="Post"/>
+        </form>
       </body>
     </html>
+  }
+
+  get("/maps/:NELat/:NELon/:SWLat/:SWLon") {
+    <html>
+      <meta name="viewport" content="initial-scale=1.0, user-scalable=no"/>
+      <meta charset="utf-8"/>
+      <style> { "html, body, #map-canvas {height: 90%;width:  90%;margin: 0px;padding: 0px}" }</style>
+      <head>
+        <title> A Map </title>
+        <script src={ "https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false" }></script>
+        <script src="/assets/map.js"></script>
+      </head>
+      <body>
+        <form method="POST" action="/maps">
+          <div id="map-canvas"></div>
+          <div id="coord-info"></div>
+          <input type="text" id="northeast" name="northeast"/>
+          <input type="text" id="southwest" name="southwest"/>
+          <input type="submit" method="Post"/>
+          <div>
+            <ul>
+              {
+                val nelat = params.getOrElse("NELat", "0").toDouble.toInt
+                val nelon = params.getOrElse("NELon", "0").toDouble.toInt
+                val swlat = params.getOrElse("SWLat", "0").toDouble.toInt
+                val swlon = params.getOrElse("SWLon", "0").toDouble.toInt
+                val nwlat = nelat
+                val nwlon = swlon
+                val selat = swlat
+                val selon = nelon
+                val geo = MongoDBObject("$geometry" ->
+                  MongoDBObject("type" -> "Polygon",
+                    "coordinates" -> List(((GeoCoords(nelon, nelat),
+                      GeoCoords(selon, selat),
+                      GeoCoords(swlon, swlat),
+                      GeoCoords(nwlon, nwlat),
+                      GeoCoords(nelon, nelat))))))
+
+                {
+                  <li>{ nelat.toString }</li>
+                  <li>{ nelon.toString }</li>
+                  <li>{ swlat.toString }</li>
+                  <li>{ swlon.toString }</li>
+                }
+
+                val query = "Location" $geoWithin (geo)
+                val result = coll.find(query)
+                for (x <- result) yield 
+                  <li>
+                    Text:{ x.getOrElse("Text", "???") }
+                    Country:{ x.getOrElse("CountryCode", "???") }
+                  </li>
+              }
+            </ul>
+          </div>
+        </form>
+      </body>
+    </html>
+  }
+
+  post("/maps") {
+    val ne = params("northeast").split(',')
+    val sw = params("southwest").split(',')
+    val nelat = ne(0)
+    val nelon = ne(1)
+    val swlat = sw(0)
+    val swlon = sw(1)
+    redirect("/maps/" + nelat + "/" + nelon + "/" + swlat + "/" + swlon)
   }
 
   get("/hello/:name") {
@@ -59,7 +136,7 @@ class clustererServlet extends TwitterclustererwebappStack with ScalateSupport {
     redirect("/msgs/" + params("author"))
   }
 
-  get("/msgs/:author") {
+  get("/msgs/:author/") {
     <body>
       <form method="POST" action="/msgs">
         Author:<input type="text" name="author"/>

@@ -40,11 +40,14 @@ function showNewRect(event) {
       'New north-east corner: ' + ne.lat() + ', ' + ne.lng() + '<br>' +
       'New south-west corner: ' + sw.lat() + ', ' + sw.lng();
 
+  document.getElementById("coord-info").innerHTML=contentString;
+  document.getElementById("northeast").value = ne.lat() + ', ' + ne.lng();
+  document.getElementById("southwest").value = sw.lat() + ', ' + sw.lng();
   // Set the info window's content and position.
-  infoWindow.setContent(contentString);
-  infoWindow.setPosition(ne);
+  //infoWindow.setContent(contentString);
+  //infoWindow.setPosition(ne);
 
-  infoWindow.open(map);
+  //infoWindow.open(map);
 }
 
 
