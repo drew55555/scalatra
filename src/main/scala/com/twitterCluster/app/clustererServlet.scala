@@ -10,10 +10,8 @@ import org.joda.convert.ToString
 import org.joda.convert.ToString
 import org.joda.convert.ToString
 
-class clustererServlet extends TwitterclustererwebappStack with ScalateSupport {
+class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStack with ScalateSupport {
 
-  val mongo = MongoConnection()
-  val coll = mongo("twitterDB")("TweetData")
 
   get("/") {
     <html>
@@ -67,10 +65,10 @@ class clustererServlet extends TwitterclustererwebappStack with ScalateSupport {
           <div>
             <ul>
               {
-                val nelat = params.getOrElse("NELat", "0").toDouble.toInt
-                val nelon = params.getOrElse("NELon", "0").toDouble.toInt
-                val swlat = params.getOrElse("SWLat", "0").toDouble.toInt
-                val swlon = params.getOrElse("SWLon", "0").toDouble.toInt
+                val nelat = params.getOrElse("NELat", "0").toDouble
+                val nelon = params.getOrElse("NELon", "0").toDouble
+                val swlat = params.getOrElse("SWLat", "0").toDouble
+                val swlon = params.getOrElse("SWLon", "0").toDouble
                 val nwlat = nelat
                 val nwlon = swlon
                 val selat = swlat
@@ -83,19 +81,11 @@ class clustererServlet extends TwitterclustererwebappStack with ScalateSupport {
                       GeoCoords(nwlon, nwlat),
                       GeoCoords(nelon, nelat))))))
 
-                {
-                  <li>{ nelat.toString }</li>
-                  <li>{ nelon.toString }</li>
-                  <li>{ swlat.toString }</li>
-                  <li>{ swlon.toString }</li>
-                }
-
                 val query = "Location" $geoWithin (geo)
-                val result = coll.find(query)
+                val result = Common.getTopicsFromQuery(query)
                 for (x <- result) yield 
                   <li>
-                    Text:{ x.getOrElse("Text", "???") }
-                    Country:{ x.getOrElse("CountryCode", "???") }
+                    Tweet: { x }
                   </li>
               }
             </ul>
