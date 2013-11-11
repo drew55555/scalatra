@@ -13,7 +13,7 @@ import scala.collection.mutable.ArrayBuffer
 
 object Common {
 
-  def getTopicsFromQuery(query: MongoDBObject): List[String] = {
+  def getTopicsFromQuery(query: MongoDBObject, kValue: Int, similarity: String): List[String] = {
 
     def buildMongoDbObject(tweet: Tweet): MongoDBObject = {
       val locBuilder = MongoDBObject.newBuilder
@@ -32,16 +32,6 @@ object Common {
         neighboor <- tweet.nearestNeighbors
       ) {
         tweets.get(neighboor._1).get.revNearCount += 1
-      }
-    }
-
-    def findNeighboors(tweets: scala.collection.Iterable[Tweet], idfResult: Map[String, Double]): Unit = {
-      for (tweet <- tweets) {
-        var dists = (for (
-          tempTweet <- tweets if (tweet.ID != tempTweet.ID)
-        ) yield new Tuple2(tempTweet.ID, tweetDotProd(tweet, tempTweet, idfResult))).toList
-        dists = dists.sortBy(x => x._2)
-        tweet.nearestNeighbors ++= dists.takeRight(10)
       }
     }
 
@@ -64,34 +54,6 @@ object Common {
       log(docCount / numTerms)
     }
 
-    def tweetDotProd(tweet1: Tweet, tweet2: Tweet, idfResult: Map[String, Double]): Double = {
-      val wordSet = (tweet1.termFreq.keys ++ tweet2.termFreq.keys).toList
-      @tailrec
-      def dotProd(words: List[String], accu: Double): Double = {
-        words match {
-          case word :: tail => dotProd(tail, accu + ((tweet1.termFreq.getOrElse[Int](word, 0) * idfResult.getOrElse[Double](word, 0)) * (tweet2.termFreq.getOrElse[Int](word, 0) * idfResult.getOrElse[Double](word, 0))))
-          case _ => accu
-        }
-      }
-      dotProd(wordSet, 0)
-    }
-
-    def tweetDist(tweet1: Tweet, tweet2: Tweet, idfResult: Map[String, Double]): Double = {
-      val wordSet = (tweet1.termFreq.keys ++ tweet2.termFreq.keys).toList
-      @tailrec
-      def dist(words: List[String], accu: Double): Double = {
-        words match {
-          case word :: tail => dist(tail, accu + diffSqares(tweet1.termFreq.getOrElse[Int](word, 0) * idfResult.getOrElse[Double](word, 0), tweet2.termFreq.getOrElse[Int](word, 0) * idfResult.getOrElse[Double](word, 0)))
-          case _ => accu
-        }
-      }
-      dist(wordSet, 0)
-    }
-
-    def diffSqares(x: Double, y: Double): Double = {
-      pow(x - y, 2)
-    }
-
     def buildTweet(obj: MongoDBObject): (String, Tweet) = {
       val id = obj.getAs[types.ObjectId]("_id").get
       val text = obj.getAs[String]("Text").get;
@@ -110,7 +72,7 @@ object Common {
     val idfTable = createIDF(tweets.values, count)
     println("IDF Created")
     //findNeighboors(tweets.values, idfTable)
-    NeighborFinders.calculate(tweetList, idfTable, count)
+    NeighborFinders.calculate(tweetList, idfTable, count, kValue, similarity)
     println("Neighboors found")
     countReverseNeighboors(tweets)
     println("Reverse Neighboors Counted")

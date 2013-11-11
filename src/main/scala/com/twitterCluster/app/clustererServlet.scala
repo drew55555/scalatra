@@ -12,7 +12,6 @@ import org.joda.convert.ToString
 
 class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStack with ScalateSupport {
 
-
   get("/") {
     <html>
       <body>
@@ -39,13 +38,20 @@ class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStac
           <div id="coord-info"></div>
           <input type="text" id="northeast" name="northeast"/>
           <input type="text" id="southwest" name="southwest"/>
-          <input type="submit" method="Post"/>
+          <input type="submit" method="Post"/><br/>
+          Similarity Type:
+          <select id="similarType" name="similarType">
+            <option value="DotProduct">Dot Product</option>
+            <option value="Euclidean">Euclidean Distance</option>
+          </select><br/>
+          K value of nearest neighboors:
+          <input type="text" id="k" name="k" value="10"/>
         </form>
       </body>
     </html>
   }
 
-  get("/maps/:NELat/:NELon/:SWLat/:SWLon") {
+  get("/maps/:NELat/:NELon/:SWLat/:SWLon/:Dist/:K") {
     <html>
       <meta name="viewport" content="initial-scale=1.0, user-scalable=no"/>
       <meta charset="utf-8"/>
@@ -61,7 +67,14 @@ class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStac
           <div id="coord-info"></div>
           <input type="text" id="northeast" name="northeast"/>
           <input type="text" id="southwest" name="southwest"/>
-          <input type="submit" method="Post"/>
+          <input type="submit" method="Post"/><br/>
+          Similarity:
+          <select id="similarType" name="similarType">
+            <option value="DotProduct">Dot Product</option>
+            <option value="Euclidean">Euclidean Distance</option>
+          </select><br/>
+          K:
+          <input type="text" id="k" name="k" value="10"/>
           <div>
             <ul>
               {
@@ -69,6 +82,8 @@ class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStac
                 val nelon = params.getOrElse("NELon", "0").toDouble
                 val swlat = params.getOrElse("SWLat", "0").toDouble
                 val swlon = params.getOrElse("SWLon", "0").toDouble
+                val kValue = params.getOrElse("K", "10").toInt
+                val similarity = params.getOrElse("Dist", "DotProduct")
                 val nwlat = nelat
                 val nwlon = swlon
                 val selat = swlat
@@ -82,11 +97,10 @@ class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStac
                       GeoCoords(nelon, nelat))))))
 
                 val query = "Location" $geoWithin (geo)
-                val result = Common.getTopicsFromQuery(query)
-                for (x <- result) yield 
-                  <li>
-                    Tweet: { x }
-                  </li>
+                val result = Common.getTopicsFromQuery(query, kValue, similarity)
+                for (x <- result) yield <li>
+                                          Tweet:{ x }
+                                        </li>
               }
             </ul>
           </div>
@@ -96,13 +110,15 @@ class clustererServlet(coll: MongoCollection) extends TwitterclustererwebappStac
   }
 
   post("/maps") {
+    val kValue = params("k")
+    val similarity = params("similarType")
     val ne = params("northeast").split(',')
     val sw = params("southwest").split(',')
     val nelat = ne(0)
     val nelon = ne(1)
     val swlat = sw(0)
     val swlon = sw(1)
-    redirect("/maps/" + nelat + "/" + nelon + "/" + swlat + "/" + swlon)
+    redirect("/maps/" + nelat + "/" + nelon + "/" + swlat + "/" + swlon + "/" + similarity + "/" + kValue)
   }
 
   get("/hello/:name") {

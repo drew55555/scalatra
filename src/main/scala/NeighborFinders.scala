@@ -10,16 +10,46 @@ import akka.util.Timeout
 import scala.concurrent.duration._
 import akka.pattern.pipe
 //import scala.concurrent.impl.Future
+import scala.math._
 
 object NeighborFinders {
   
   sealed trait TweetMessage
   case object Calculate extends TweetMessage
-  case class Work(tweets: scala.collection.Iterable[Tweet], idfResult: Map[String, Double], sublist: List[Tweet])
+  case class Work(tweets: scala.collection.Iterable[Tweet], idfResult: Map[String, Double], sublist: List[Tweet], k: Int, compare: String)
   case class Result() extends TweetMessage
   case class Finished() extends TweetMessage
   
   class Worker extends Actor {
+    
+    def findNearestNeighbors(tweets: List[Tweet], idfResult: Map[String, Double], sublist: List[Tweet], k: Int, comparrer: (Tweet, Tweet, Map[String, Double]) => Double, compareString: String) = {
+      for (tweet <- sublist) {
+        var dists = (for (
+          tempTweet <- tweets if (tweet.ID != tempTweet.ID)
+        ) yield new Tuple2(tempTweet.ID, comparrer(tweet, tempTweet, idfResult))).toList
+        dists = dists.sortBy(x => x._2)
+        tweet.nearestNeighbors ++= (if(compareString == "Euclidean") dists.take(k) else dists.takeRight(k))
+      }
+    }
+    
+    def receive = {
+      case Work(tweets: List[Tweet], idfResult: Map[String, Double], sublist: List[Tweet], k: Int, compare: String) =>
+        
+        def tweetDist(tweet1: Tweet, tweet2: Tweet, idfResult: Map[String, Double]): Double = {
+      val wordSet = (tweet1.termFreq.keys ++ tweet2.termFreq.keys).toList
+      @tailrec
+      def dist(words: List[String], accu: Double): Double = {
+        words match {
+          case word :: tail => dist(tail, accu + diffSqares(tweet1.termFreq.getOrElse[Int](word, 0) * idfResult.getOrElse[Double](word, 0), tweet2.termFreq.getOrElse[Int](word, 0) * idfResult.getOrElse[Double](word, 0)))
+          case _ => accu
+        }
+      }
+      dist(wordSet, 0)
+    }
+
+    def diffSqares(x: Double, y: Double): Double = {
+      pow(x - y, 2)
+    }
     
     def tweetDotProd(tweet1: Tweet, tweet2: Tweet, idfResult: Map[String, Double]): Double = {
       val wordSet = (tweet1.termFreq.keys ++ tweet2.termFreq.keys).toList
@@ -33,25 +63,19 @@ object NeighborFinders {
       dotProd(wordSet, 0)
     }
     
-    def findNearestNeighbors(tweets: List[Tweet], idfResult: Map[String, Double], sublist: List[Tweet]) = {
-      for (tweet <- sublist) {
-        var dists = (for (
-          tempTweet <- tweets if (tweet.ID != tempTweet.ID)
-        ) yield new Tuple2(tempTweet.ID, tweetDotProd(tweet, tempTweet, idfResult))).toList
-        dists = dists.sortBy(x => x._2)
-        tweet.nearestNeighbors ++= dists.takeRight(10)
-      }
-    }
-    
-    def receive = {
-      case Work(tweets: List[Tweet], idfResult: Map[String, Double], sublist: List[Tweet]) =>
+        val comparrer: (Tweet, Tweet, Map[String, Double]) => Double = compare match {
+          case "Euclidean" => 
+            tweetDist
+          case _ =>
+            tweetDotProd
+        }
         println("Worker: " + sublist.length)
-        findNearestNeighbors(tweets, idfResult, sublist)
+        findNearestNeighbors(tweets, idfResult, sublist, k, comparrer, compare)
         sender ! Result
     }
   }
   
-  class Master (tweets: List[Tweet], idfResult: Map[String, Double], tweetCount: Int, listener: ActorRef)
+  class Master (tweets: List[Tweet], idfResult: Map[String, Double], tweetCount: Int, listener: ActorRef, k: Int, compare: String)
     extends Actor {
     import context.dispatcher
     var senderRef: ActorRef = _
@@ -71,7 +95,7 @@ object NeighborFinders {
         val lists = tweets.grouped(tweetCount/ numWorkers).toList
         println("Calculate Started")
         for(sublist <- lists) {
-          workRouter ! Work(tweets, idfTable, sublist)
+          workRouter ! Work(tweets, idfTable, sublist, k, compare)
         }
       case Result =>
         completedWorkers += 1
@@ -94,10 +118,10 @@ object NeighborFinders {
   }
   
   
-  def calculate(tweets: List[Tweet], idfResult: Map[String, Double], tweetCount: Int) = {
+  def calculate(tweets: List[Tweet], idfResult: Map[String, Double], tweetCount: Int, kValue: Int, similarity: String) = {
     val system = ActorSystem("TweetSystem")
     val listener = system.actorOf(Props[Listener], name = "listener")
-    val master = system.actorOf(Props(new Master(tweets, idfResult, tweetCount, listener)),
+    val master = system.actorOf(Props(new Master(tweets, idfResult, tweetCount, listener, kValue, similarity)),
         name = "master")
         
     implicit val timeout = Timeout(10 hours)
